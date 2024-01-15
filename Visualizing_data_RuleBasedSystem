@@ -1,0 +1,353 @@
+# Import necessary libraries
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+import squarify
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS as STOPWORDS
+import numpy as np
+
+# Define the file path for the CSV file
+csv_file_path = 'C:/Users/Danille/Desktop/Gebied_07/Vondsten/07_vondsten_lijst.csv'
+
+# Load the CSV file into a DataFrame
+df = pd.read_csv(csv_file_path, delimiter=';')
+
+# Mapping of archaeological periods to date ranges (update as needed)
+archaeological_periods_mapping = {
+    'paleolithicum': 'everything until 8800 BC',
+    'mesolithicum': '8800 BC - 5300 BC',
+    'neolithicum': '5300 BC - 2000 BC',
+    'vroege bronstijd': '2000 BC - 1800 BC',
+    'midden bronstijd': '1800 BC - 1100 BC',
+    'late brondstijd': '1100 BC - 800 BC',
+    'vroege ijzertijd': '800 BC - 500 BC',
+    'midden ijzertijd': '500 BC - 250 BC',
+    'late ijzertijd': '250 BC - 12 BC',
+    'vroeg romeinsetijd': '12 BC - 70 AD',
+    'midden romeinsetijd': '70 AD - 270 AD',
+    'laat romeinsetijd': '270 AD - 450 AD',
+    'vroege middeleeuwen': '450 AD - 1050 AD',
+    'late middeleeuwen': '1050 AD - 1500 AD',
+    'vroege nieuwetijd': '1500 AD - 1650 AD',
+    'midden nieuwetijd': '1650 AD - 1850 AD',
+    'late nieuwetijd': '1850 AD - 1945 AD',
+}
+
+# Function to convert archaeological periods to date ranges
+def convert_to_date_range(period):
+    return archaeological_periods_mapping.get(period.lower(), period)
+
+# Function to analyze and categorize data columns
+def analyze_data(data):
+    categorical_cols = []
+    numeric_cols = []
+    cat_num_cols = []
+    map_cols = []
+    network_cols = []
+    time_series_cols = []
+
+    for col in data.columns:
+        # Identify time series columns and convert archaeological periods to date ranges
+        if 'datering' in col.lower() or 'date' in col.lower() or 'fase' in col.lower():
+            time_series_cols.append(col)
+            data[col] = data[col].apply(convert_to_date_range)
+        # Categorize columns based on data type
+        elif data[col].dtype == 'O':
+            categorical_cols.append(col)
+        elif pd.api.types.is_numeric_dtype(data[col]):
+            numeric_cols.append(col)
+
+    return {
+        'Categorical Columns': categorical_cols,
+        'Numeric Columns': numeric_cols,
+        'Categorical and Numeric Columns': cat_num_cols,
+        'Map Columns': map_cols,
+        'Network Columns': network_cols,
+        'Time Series Columns': time_series_cols
+    }
+
+# Analyze the data
+data_categories = analyze_data(df)
+
+# Function to create visualizations for numeric columns
+def create_numeric_visualizations(data, numeric_cols):
+    if len(numeric_cols) == 1:
+        # Histogram
+        x_col = numeric_cols[0]
+        plt.figure(figsize=(8, 6))  # Adjusted size for A4 readability
+        sns.histplot(data[x_col], kde=True, bins=20)
+        plt.title(f'Histogram for {x_col}')
+
+        # Density plot
+        plt.figure(figsize=(8, 6))
+        sns.kdeplot(data[x_col], fill=True)
+        plt.title(f'Density Plot for {x_col}')
+  
+    elif len(numeric_cols) == 2:
+        # Violin Plot
+        plt.figure(figsize=(8, 6))
+        sns.violinplot(data=data[numeric_cols], inner="points", palette='viridis')
+        plt.title(f'Violinplot for {", ".join(numeric_cols)}')
+        
+        # Scatterplot with marginal points
+        plt.figure(figsize=(8, 6))
+        sns.scatterplot(x=numeric_cols[0], y=numeric_cols[1], data=data, hue=data[numeric_cols[0]], palette='viridis', legend='full', alpha=0.7)
+       
+        # Histogram
+        sns.histplot(data[numeric_cols], kde=True, bins=20, element="step", fill=False, common_norm=False)
+        plt.title(f'Scatterplot with Marginal Points for {", ".join(numeric_cols)}')
+  
+    elif len(numeric_cols) >= 3:
+        # Violinplot
+        plt.figure(figsize=(8, 6))
+        sns.violinplot(data=data[numeric_cols], inner="points", palette='viridis')
+        plt.title(f'Violinplot for {", ".join(numeric_cols)}')
+        
+        # Boxplot
+        plt.figure(figsize=(8, 6))
+        sns.boxplot(data=data[numeric_cols], palette='viridis')
+        plt.title(f'Boxplot for {", ".join(numeric_cols)}')
+        
+        # Stacked Area Plot
+        plt.figure(figsize=(8, 6))
+        sns.lineplot(data=data[numeric_cols].cumsum(axis=1))
+        plt.title(f'Stacked Area Plot for {", ".join(numeric_cols)}')
+        
+        # Streamgraph
+        plt.figure(figsize=(8, 6))
+        sns.lineplot(data=data[numeric_cols], dashes=False)
+        plt.title(f'Streamgraph for {", ".join(numeric_cols)}')
+        
+    plt.tight_layout()  # Adjust layout for A4
+    plt.show()
+
+# Create visualizations for numeric columns
+create_numeric_visualizations(df, data_categories['Numeric Columns'])
+
+# Function to create visualizations for categorical columns
+def create_categoric_visualizations(data, categorical_cols):
+    for col in categorical_cols:
+        values = data[col].value_counts()
+        if len(values) == 1:
+            # Barplot
+            plt.figure(figsize=(8, 6))
+            sns.barplot(x=values.index, y=values)
+            if evaluate_visualization_quality(plt.gca(), f'Barplot for {col}'):
+                plt.title(f'Barplot for {col}')
+                plt.show()
+        elif len(values) == 2:
+            # Lollipop plot
+            plt.figure(figsize=(8, 6))
+            sns.barplot(x=values.index, y=values)
+            sns.scatterplot(x=values.index, y=values, color='red', marker='o', s=100)
+            if evaluate_visualization_quality(plt.gca(), f'Lollipop Plot for {col}'):
+                plt.title(f'Lollipop Plot for {col}')
+                plt.show()
+        elif len(values) > 2:
+            # Wordcloud
+            plt.figure(figsize=(8, 8))
+            wordcloud = WordCloud(width=800, height=800, background_color='white').generate_from_frequencies(values)
+            
+            # Evaluate text overlap
+            overlap_score = evaluate_text_overlap(wordcloud)
+            
+            # Display the wordcloud if overlap is below a threshold and general quality is acceptable
+            if overlap_score < 10 and evaluate_visualization_quality(plt.gca(), f'Wordcloud for {col}'):
+                plt.imshow(wordcloud, interpolation='bilinear')
+                plt.axis('off')
+                plt.title(f'Wordcloud for {col}')
+                plt.show()
+            
+            # Doughnut plot
+            plt.figure(figsize=(8, 8))
+            plt.pie(values, labels=values.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette('viridis', len(values)))
+            centre_circle = plt.Circle((0,0),0.70,fc='white')
+            fig = plt.gcf()
+            fig.gca().add_artist(centre_circle)
+            if evaluate_visualization_quality(plt.gca(), f'Doughnut Plot for {col}'):
+                plt.title(f'Doughnut Plot for {col}')
+                plt.show()
+
+            # Pie chart
+            plt.figure(figsize=(8, 8))
+            plt.pie(values, labels=values.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette('viridis', len(values)))
+            if evaluate_visualization_quality(plt.gca(), f'Pie Chart for {col}'):
+                plt.title(f'Pie Chart for {col}')
+                plt.show()
+
+            # Treemap
+            plt.figure(figsize=(8, 8))
+            squarify.plot(sizes=values, label=values.index, color=sns.color_palette('viridis', len(values)))
+            plt.axis('off')
+            if evaluate_visualization_quality(plt.gca(), f'Treemap for {col}'):
+                plt.title(f'Treemap for {col}')
+                plt.show()
+
+            # Circular Packing
+            plt.figure(figsize=(8, 8))
+            sns.heatmap([values], annot=True, fmt="d", cmap='viridis', cbar=False)
+            if evaluate_visualization_quality(plt.gca(), f'Circular Packing for {col}'):
+                plt.title(f'Circular Packing for {col}')
+                plt.show()
+
+        plt.tight_layout()  # Adjust layout for A4
+
+        # Create visualizations for categorical columns
+create_categoric_visualizations(df, data_categories['Categorical Columns'])
+
+# Function to evaluate general quality of a visualization
+def evaluate_visualization_quality(ax, title):
+    quality_score = 0
+
+    # Check if axis labels are readable
+    x_label = ax.get_xlabel()
+    y_label = ax.get_ylabel()
+    if x_label and y_label:
+        quality_score += 1
+
+    # Check if the color contrast is sufficient
+    if ax.get_legend() is not None:
+        quality_score += 1
+
+    # Check if the figure size is appropriate for the data
+    figure_size = ax.get_figure().get_size_inches()
+    if figure_size[0] >= 8 and figure_size[1] >= 6:
+        quality_score += 1
+
+    # Check if there is no overlap of text
+    texts = [text for text in ax.get_figure().texts if text.get_text().strip()]
+    if len(texts) == len(set(text.get_text() for text in texts)):
+        quality_score += 1
+
+    # Calculate the overall quality score (adjust weights as needed)
+    overall_quality_score = quality_score / 4  # Normalize to a score between 0 and 1
+
+    # Return True if the overall quality score is above a certain threshold
+    if overall_quality_score > 0.75:
+        return True
+    else:
+        print(f'Skipping visualization "{title}" due to low quality.')
+        return False
+
+# Function to evaluate text overlap in a wordcloud
+def evaluate_text_overlap(wordcloud):
+    stopwords = set(STOPWORDS)
+    overlap_score = len(set(wordcloud.words_.keys()) & stopwords)
+    return overlap_score
+
+# Function to evaluate color contrast in a scatter plot
+def evaluate_color_contrast(scatter_plot):
+    contrast_score = np.mean(np.abs(scatter_plot.get_facecolor() - scatter_plot.get_axes().get_facecolor()))
+    return contrast_score
+
+# Function to create and evaluate visualizations
+def create_and_evaluate_visualizations(data, columns, visualization_type):
+    for col in columns:
+        if data[col].dtype == 'O':  # Categorical data
+            values = data[col].value_counts()
+            
+            if visualization_type == 'wordcloud':
+                # Wordcloud
+                plt.figure(figsize=(8, 8))
+                wordcloud = WordCloud(width=800, height=800, background_color='white').generate_from_frequencies(values)
+                
+                # Evaluate text overlap
+                overlap_score = evaluate_text_overlap(wordcloud)
+                
+                # Display the wordcloud if overlap is below a threshold and general quality is acceptable
+                if overlap_score < 10 and evaluate_visualization_quality(plt.gca()):
+                    plt.imshow(wordcloud, interpolation='bilinear')
+                    plt.axis('off')
+                    plt.title(f'Wordcloud for {col}')
+                    plt.show()
+        
+        elif pd.api.types.is_numeric_dtype(data[col]):  # Numeric data
+            if visualization_type == 'scatter':
+                # Scatter plot
+                plt.figure(figsize=(8, 6))
+                scatter_plot = sns.scatterplot(x=col, y=data.select_dtypes(include=['number']).columns[0], data=data)
+                
+                # Evaluate color contrast
+                contrast_score = evaluate_color_contrast(scatter_plot)
+                
+                # Display the scatter plot if contrast is above a threshold and general quality is acceptable
+                if contrast_score > 0.1 and evaluate_visualization_quality(plt.gca()):
+                    plt.title(f'Scatter Plot for {col}')
+                    plt.show()
+
+            elif visualization_type == 'histogram':
+                # Histogram
+                plt.figure(figsize=(12, 6))
+                sns.histplot(data[col], kde=True, bins=20)
+                plt.title(f'Histogram for {col}')
+                plt.show()
+
+            elif visualization_type == 'density':
+                # Density plot
+                plt.figure(figsize=(12, 6))
+                sns.kdeplot(data[col], fill=True)
+                plt.title(f'Density Plot for {col}')
+                plt.show()
+
+            elif visualization_type == 'boxplot':
+                # Boxplot
+                plt.figure(figsize=(10, 6))
+                sns.boxplot(x=data.select_dtypes(include=['object']).columns[0], y=col, data=data)
+                plt.title(f'Boxplot for {col}')
+                plt.show()
+
+            elif visualization_type == 'violinplot':
+                # Violinplot
+                plt.figure(figsize=(10, 6))
+                sns.violinplot(x=data.select_dtypes(include=['object']).columns[0], y=col, data=data, inner="points", palette='viridis')
+                plt.title(f'Violinplot for {col}')
+                plt.show()
+
+            elif visualization_type == 'pairplot':
+                # Pairplot for multiple numeric columns
+                numeric_cols = list(data.select_dtypes(include=['number']).columns)
+                sns.pairplot(data[numeric_cols])
+                plt.show()
+
+# Create and evaluate visualizations for numeric columns
+create_and_evaluate_visualizations(df, data_categories['Numeric Columns'], 'histogram')
+create_and_evaluate_visualizations(df, data_categories['Numeric Columns'], 'density')
+create_and_evaluate_visualizations(df, data_categories['Numeric Columns'], 'boxplot')
+create_and_evaluate_visualizations(df, data_categories['Numeric Columns'], 'violinplot')
+create_and_evaluate_visualizations(df, data_categories['Numeric Columns'], 'pairplot')
+
+
+# Main function to evaluate and create visualizations automatically
+def evaluate_and_create_visualizations(data, columns):
+    for col in columns:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            # Evaluate and create visualizations for numeric columns
+            create_and_evaluate_visualizations(data, [col], 'scatter')
+            create_and_evaluate_visualizations(data, [col], 'histogram')
+            create_and_evaluate_visualizations(data, [col], 'density')
+            create_and_evaluate_visualizations(data, [col], 'boxplot')
+            create_and_evaluate_visualizations(data, [col], 'violinplot')
+            create_and_evaluate_visualizations(data, [col], 'pairplot')
+
+# Main function to evaluate and create visualizations automatically for all columns
+def evaluate_and_create_visualizations(data, columns):
+    for col in columns:
+        if pd.api.types.is_numeric_dtype(data[col]):
+            # Evaluate and create visualizations for numeric columns
+            create_and_evaluate_visualizations(data, [col], 'scatter')
+            create_and_evaluate_visualizations(data, [col], 'histogram')
+            create_and_evaluate_visualizations(data, [col], 'density')
+            create_and_evaluate_visualizations(data, [col], 'boxplot')
+            create_and_evaluate_visualizations(data, [col], 'violinplot')
+            create_and_evaluate_visualizations(data, [col], 'pairplot')
+        elif data[col].dtype == 'O':
+            # Evaluate and create visualizations for categorical columns
+            create_categoric_visualizations(data, [col])
+
+# Main function to automatically evaluate and create visualizations for all columns
+def evaluate_and_create_visualizations_auto(df):
+    evaluate_and_create_visualizations(df, df.columns)
+
+# Trigger the automatic evaluation and visualization creation for all columns
+evaluate_and_create_visualizations_auto(df)
